@@ -59,7 +59,8 @@ public class PushdownAutomaton extends Automaton {
             System.out.println("Stack " + this.stack);
         }
 
-        return states.stream().anyMatch(this.finals::contains) && stack.isEmpty() == needEmptyStack;
+        boolean stackCondition = stack.isEmpty() || !needEmptyStack;
+        return states.stream().anyMatch(this.finals::contains) && stackCondition;
     }
 
     private Set<State> fetchEpsilons(Set<State> states) {
