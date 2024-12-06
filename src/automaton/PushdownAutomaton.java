@@ -6,7 +6,7 @@ import static automaton.Transition.EPSILON;
 
 public class PushdownAutomaton extends Automaton {
 
-    private final Map<State, Map<Character, Transition>> transitions;
+    private final Map<State, Map<Character, Set<Transition>>> transitions;
     private final Stack<Character> stack;
     private final boolean needEmptyStack;
 
@@ -24,7 +24,8 @@ public class PushdownAutomaton extends Automaton {
     public void makeTransition(State start, Character character, Character seeing, Character pushing, Set<State> routes) {
         this.transitions
                 .computeIfAbsent(start, _ -> new HashMap<>())
-                .computeIfAbsent(character, _ -> new Transition(seeing, pushing, routes));
+                .computeIfAbsent(character, _ -> new HashSet<>())
+                .add(new Transition(seeing, pushing, routes));
     }
 
     @Override
@@ -36,27 +37,28 @@ public class PushdownAutomaton extends Automaton {
                 throw new IllegalArgumentException("Simbolo não consta no alfabeto");
             }
 
-            System.out.println("Lendo o simbolo -> " + symbol);
+            System.out.printf("Lendo o simbolo > %s%n", symbol);
             Set<State> futures = new HashSet<>();
 
             for (State each : states) {
-                Map<Character, Transition> transitions = this.transitions.get(each);
+                Map<Character, Set<Transition>> routes = this.transitions.get(each);
+                if (routes == null) {
+                    continue;
+                }
+
+                Set<Transition> transitions = routes.get(symbol);
                 if (transitions == null) {
                     continue;
                 }
 
-                Transition transition = transitions.get(symbol);
-                if (transition == null) {
-                    continue;
-                }
-
-                if (transition.check(this.stack)) {
-                    futures.addAll(transition.routes());
-                }
+                transitions.stream()
+                        .filter(transition -> transition.check(this.stack))
+                        .map(Transition::routes)
+                        .forEach(futures::addAll);
             }
 
             states = fetchEpsilons(futures);
-            System.out.println("Stack " + this.stack);
+            System.out.printf("Stack %s%n", this.stack);
         }
 
         boolean stackCondition = stack.isEmpty() || !needEmptyStack;
@@ -65,29 +67,29 @@ public class PushdownAutomaton extends Automaton {
 
     private Set<State> fetchEpsilons(Set<State> states) {
         Set<State> futures = new HashSet<>(states);
-        Stack<State> stack = new Stack<>();
-        stack.addAll(states);
+        Stack<State> visit = new Stack<>();
+        visit.addAll(states);
 
-        while (!stack.isEmpty()) {
-            State current = stack.pop();
+        while (!visit.isEmpty()) {
+            State current = visit.pop();
 
-            Map<Character, Transition> transitions = this.transitions.get(current);
-            if (transitions == null) {
+            Map<Character, Set<Transition>> routes = this.transitions.get(current);
+            if (routes == null) {
                 continue;
             }
 
-            Transition epsilon = transitions.get('ε');
-            if (epsilon == null || !epsilon.check(this.stack)) {
+            Set<Transition> epsilons = routes.get('ε');
+            if (epsilons == null) {
                 continue;
             }
 
-            for (State each : epsilon.routes()) {
-                System.out.println("Transição epsilon -> " + epsilon);
-                if (!futures.contains(each)) {
-                    futures.add(each);
-                    stack.push(each);
-                }
-            }
+            System.out.printf("Lendo transição epsilon > %s, %s%n", current, epsilons);
+            epsilons.stream()
+                    .filter(transition -> transition.check(this.stack))
+                    .flatMap(transition -> transition.routes().stream())
+                    .filter(state -> !futures.contains(state))
+                    .filter(futures::add)
+                    .forEach(visit::push);
         }
 
         return futures;
